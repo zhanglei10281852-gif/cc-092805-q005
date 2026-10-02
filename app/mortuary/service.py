@@ -150,7 +150,10 @@ class MortuaryService:
                 raise ConflictError("已完成的预约不能取消")
             connection.execute("UPDATE facility_reservations SET status='cancelled',updated_at=? WHERE id=?", (now, reservation_id))
             repo.event("case", reservation["case_id"], "reservation.cancelled", actor, {"reservation_id": reservation_id, "reason": reason}, now)
-            return repo.reservation(reservation_id) or {}
+            released = repo.reservation(reservation_id) or {}
+            from app.mortuary.orchestration import CeremonyOrchestrationService
+            CeremonyOrchestrationService(connection, ensure=False).maintenance_in_transaction(connection, actor, "reservation.cancelled")
+            return released
 
     def add_order(self, payload: dict[str, Any]) -> dict[str, Any]:
         now = self.now()

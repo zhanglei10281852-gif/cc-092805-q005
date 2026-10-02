@@ -311,6 +311,12 @@ PERMISSIONS = [
     ("announcements.write", "维护公告", "announcements", "write"),
     ("audit.read", "查看审计", "audit", "read"),
     ("jobs.run", "执行后台任务", "jobs", "run"),
+    ("mortuary.ceremony.read", "查看仪式编排", "mortuary_ceremony", "read"),
+    ("mortuary.ceremony.schedule", "创建与释放整组占用", "mortuary_ceremony", "schedule"),
+    ("mortuary.ceremony.confirm", "确认整组占用", "mortuary_ceremony", "confirm"),
+    ("mortuary.ceremony.waitlist", "登记与撤销候补", "mortuary_ceremony", "waitlist"),
+    ("mortuary.ceremony.review", "审核紧急等级与推进候补", "mortuary_ceremony", "review"),
+    ("mortuary.ceremony.override", "人工候补越序", "mortuary_ceremony", "override"),
 ]
 
 

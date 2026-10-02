@@ -114,3 +114,63 @@ class PaymentCreate(BaseModel):
     channel: str = Field(min_length=2, max_length=40)
     external_reference: str = Field(min_length=4, max_length=120)
     received_by: str = Field(min_length=2, max_length=80)
+
+
+class CeremonyItem(BaseModel):
+    resource_code: str = Field(min_length=2, max_length=40)
+    start_at: datetime
+    end_at: datetime
+    purpose: str = Field(default="", max_length=300)
+
+    @model_validator(mode="after")
+    def validate_interval(self):
+        if self.end_at <= self.start_at:
+            raise ValueError("结束时间必须晚于开始时间")
+        return self
+
+
+class CeremonyHoldCreate(BaseModel):
+    case_id: int = Field(gt=0)
+    title: str = Field(default="", max_length=200)
+    items: list[CeremonyItem] = Field(min_length=1, max_length=20)
+    hold_minutes: int = Field(default=30, ge=1, le=4320)
+    idempotency_key: str = Field(min_length=8, max_length=120)
+
+    @model_validator(mode="after")
+    def unique_resources(self):
+        keys = [(item.resource_code, item.start_at) for item in self.items]
+        if len(set(keys)) != len(keys):
+            raise ValueError("整组占用中存在重复的资源时段")
+        return self
+
+
+class CeremonyPreflight(BaseModel):
+    case_id: int | None = Field(default=None, gt=0)
+    items: list[CeremonyItem] = Field(min_length=1, max_length=20)
+
+
+class CeremonyRelease(BaseModel):
+    reason: str = Field(min_length=2, max_length=500)
+
+
+class CeremonyWaitlistJoin(BaseModel):
+    case_id: int = Field(gt=0)
+    items: list[CeremonyItem] = Field(min_length=1, max_length=20)
+    body_preserve_until: datetime
+    urgency_level: int = Field(default=0, ge=0, le=3)
+    hold_minutes: int = Field(default=30, ge=1, le=4320)
+    idempotency_key: str = Field(min_length=8, max_length=120)
+
+
+class CeremonyUrgencyReview(BaseModel):
+    urgency_level: int = Field(ge=0, le=3)
+    note: str = Field(min_length=2, max_length=500)
+
+
+class CeremonyOrderOverride(BaseModel):
+    position: int = Field(ge=1)
+    reason: str = Field(min_length=4, max_length=500)
+
+
+class CeremonyWaitlistCancel(BaseModel):
+    reason: str = Field(min_length=2, max_length=500)

@@ -13,6 +13,7 @@ from app.seismic.router import router as seismic_router
 from app.seismic.service import ensure_schema as ensure_seismic_schema
 from app.compute.router import router as compute_router
 from app.mortuary.router import router as mortuary_router
+from app.mortuary.ceremony_router import router as mortuary_ceremony_router
 from app.mortuary.service import MortuaryService
 
 
@@ -55,6 +56,7 @@ app.include_router(petitions.router)
 app.include_router(seismic_router)
 app.include_router(compute_router)
 app.include_router(mortuary_router)
+app.include_router(mortuary_ceremony_router)
 
 
 @app.get("/")

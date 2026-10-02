@@ -14,7 +14,23 @@
 
 ## 初始化与启动
 
-先执行 python -m app.cli init-db 和 python -m app.cli check-db，再用 uvicorn app.main:app --host 0.0.0.0 --port 8432 启动。健康检查为 GET /api/system/health。殡葬业务接口位于 /api/mortuary，涵盖档案、交接、资源、预约、服务订单、墓位权属、账单和时间线。
+先执行 python -m app.cli init-db 和 python -m app.cli check-db，再用 uvicorn app.main:app --host 0.0.0.0 --port 8432 启动。健康检查为 GET /api/system/health。殡葬业务接口位于 /api/mortuary，涵盖档案、交接、资源、预约、服务订单、墓位权属、账单和时间线；大型告别仪式的跨资源整组占用与候补编排在 /api/mortuary/ceremonies 与 /api/mortuary/waitlist。
+
+## 大型告别仪式跨资源编排
+
+礼厅、接运车辆、礼仪人员和火化时段通过整组占用一并预约：
+
+- POST /api/mortuary/ceremonies/preflight：预检各资源容量，返回阻塞资源明细。
+- POST /api/mortuary/ceremonies/holds：在单个 IMMEDIATE 事务内为整组资源创建有期限（hold_minutes）的 held 占用。任一资源冲突整笔回滚，绝不留下部分成功；请求按 (case_id, idempotency_key) 幂等。
+- POST /api/mortuary/ceremonies/{id}/confirm：由具备 mortuary.ceremony.confirm 权限的人员整体确认；POST /api/mortuary/ceremonies/{id}/release 整体释放并触发候补推进。
+- 持有超时由系统自动整体释放（system:hold-expiry），释放后在同一事务内幂等推进候补。
+- POST /api/mortuary/waitlist：登记候补，综合排序为“已审核紧急等级降序 → 遗体保存期限升序 → 申请时间升序”，自行申报的紧急等级须经 mortuary.ceremony.review 审核后才生效；超过遗体保存期限的候补自动失效。
+- POST /api/mortuary/waitlist/{id}/urgency-review 审核紧急等级；POST /api/mortuary/waitlist/{id}/override 人工越序，必须填写理由，动作写入 ceremony_waitlist_overrides 与审计事件。
+- POST /api/mortuary/waitlist/advance 手动触发清理与推进；重复推进不会重复递补。
+- GET /api/mortuary/cases/{case_id}/ceremony-overview 供家属服务人员查询整场仪式的阻塞资源、确认状态、候补名次与历次调整。
+
+编排状态全部落 SQLite（WAL），没有内存队列，重启后未过期的整组占用与候补位置不丢失。
+
 
 ## 测试与编译检查
 
