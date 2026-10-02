@@ -16,6 +16,19 @@
 
 先执行 python -m app.cli init-db 和 python -m app.cli check-db，再用 uvicorn app.main:app --host 0.0.0.0 --port 8432 启动。健康检查为 GET /api/system/health。殡葬业务接口位于 /api/mortuary，涵盖档案、交接、资源、预约、服务订单、墓位权属、账单和时间线。
 
+## 跨资源整组编排
+
+大型告别仪式同时占用送别厅、接运车辆、礼仪人员和火化时段，单项逐个预约会留下部分成功。`/api/mortuary/ceremony-groups` 提供整组编排：
+
+- `POST /ceremony-groups`：在单个即时事务内检查全部资源，全部可用才一次性写入带期限的持有占用（`held`），任一资源冲突整体回滚并返回 `blocking_resources`，不保留任何部分占用；幂等键重复且内容一致返回原记录，内容变化返回冲突。
+- `POST /ceremony-groups/{id}/confirm`：由 approver（或系统管理员）在确认期限内把整组置为 `confirmed`；`POST /ceremony-groups/{id}/release` 整体释放并在同一事务内幂等推进候补。
+- `POST /ceremony-groups/waitlist`：直接登记候补；`GET /waitlist` 返回综合排序名次。排序依据为人工越序号（越靠前）、经审核紧急等级（高者优先）、遗体保存期限（早者优先）、申请时间（先者优先）。
+- `POST /waitlist/promote`：容量释放后按名次幂等推进，重复幂等键回放同一结果；`POST /ceremony-groups/expire-holds` 清扫超过确认期限的持有并级联推进候补。
+- `POST /ceremony-groups/{id}/waitlist/override`：仅 approver 可越序，必须填写理由，动作与前后队列快照写入 `ceremony_interventions` 审计；`POST /ceremony-groups/{id}/urgency-review` 用于审核紧急等级。
+- 授权人员通过 `POST /orchestration/actors/grant` 维护（角色 family_service/planner/approver）。`GET /ceremony-groups/{id}` 返回整场仪式的各资源明细、阻塞资源、确认状态、候补名次、历次审计干预与时间线。
+
+持有占用与候补均落库，进程重启后未过期数据原样恢复；清扫只处理真正到期的持有，不影响其他记录。
+
 ## 测试与编译检查
 
 测试命令：python -m pytest
@@ -35,4 +48,4 @@ API 与 CLI 冒烟命令：python -m app.cli smoke、python -m app.cli mortuary-
 
 ## 一致性约定
 
-SQLite 连接启用外键、WAL、忙等待和即时事务。业务档案采用外部编号去重，保管交接与预约保留幂等键，服务订单开票后不可再次开票，支付流水不能重复分配。关键状态变化同时写入领域时间线；会话令牌仅保存摘要，审计记录不会保存明文密码或令牌。
+SQLite 连接启用外键、WAL、忙等待和即时事务。业务档案采用外部编号去重，保管交接与预约保留幂等键，服务订单开票后不可再次开票，支付流水不能重复分配。整组仪式占用在单个事务内判定全部资源（含 `held` 持有态）后统一提交或回滚，候补推进与过期清扫均幂等且持久化。关键状态变化同时写入领域时间线；会话令牌仅保存摘要，审计记录不会保存明文密码或令牌。

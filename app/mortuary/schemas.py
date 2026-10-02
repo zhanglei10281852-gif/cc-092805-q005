@@ -114,3 +114,74 @@ class PaymentCreate(BaseModel):
     channel: str = Field(min_length=2, max_length=40)
     external_reference: str = Field(min_length=4, max_length=120)
     received_by: str = Field(min_length=2, max_length=80)
+
+
+class CeremonyResourceLine(BaseModel):
+    resource_code: str = Field(min_length=2, max_length=40)
+    start_at: datetime
+    end_at: datetime
+
+    @model_validator(mode="after")
+    def validate_interval(self):
+        if self.end_at <= self.start_at:
+            raise ValueError("结束时间必须晚于开始时间")
+        if (self.end_at - self.start_at).total_seconds() > 259200:
+            raise ValueError("单条资源占用不能超过七十二小时")
+        return self
+
+
+class CeremonyGroupCreate(BaseModel):
+    case_id: int = Field(gt=0)
+    purpose: str = Field(min_length=2, max_length=300)
+    created_by: str = Field(min_length=2, max_length=80)
+    idempotency_key: str = Field(min_length=8, max_length=120)
+    hold_ttl_minutes: int = Field(default=30, ge=1, le=1440)
+    body_preservation_deadline: datetime
+    urgency_level: int = Field(default=0, ge=0, le=100)
+    urgency_reviewed_by: str = Field(default="", max_length=80)
+    resources: list[CeremonyResourceLine] = Field(min_length=1, max_length=20)
+
+    @model_validator(mode="after")
+    def validate_request(self):
+        codes = [line.resource_code for line in self.resources]
+        if len(codes) != len(set(codes)):
+            raise ValueError("同一资源在一场仪式中只能出现一次")
+        if self.urgency_level > 0 and not self.urgency_reviewed_by.strip():
+            raise ValueError("紧急等级大于零时必须填写审核人")
+        return self
+
+
+class CeremonyGroupConfirm(BaseModel):
+    actor: str = Field(min_length=2, max_length=80)
+
+
+class CeremonyGroupRelease(BaseModel):
+    actor: str = Field(min_length=2, max_length=80)
+    reason: str = Field(min_length=2, max_length=500)
+
+
+class WaitlistOverride(BaseModel):
+    actor: str = Field(min_length=2, max_length=80)
+    reason: str = Field(min_length=5, max_length=500)
+    ahead_of_group_id: int | None = Field(default=None, gt=0)
+
+
+class WaitlistCancel(BaseModel):
+    actor: str = Field(min_length=2, max_length=80)
+    reason: str = Field(min_length=2, max_length=500)
+
+
+class UrgencyReview(BaseModel):
+    actor: str = Field(min_length=2, max_length=80)
+    urgency_level: int = Field(ge=0, le=100)
+
+
+class PromotionRun(BaseModel):
+    idempotency_key: str = Field(min_length=8, max_length=120)
+    actor: str = Field(min_length=2, max_length=80)
+
+
+class ActorGrant(BaseModel):
+    actor: str = Field(min_length=2, max_length=80)
+    role: str = Field(pattern=r"^(family_service|planner|approver)$")
+    granted_by: str = Field(min_length=2, max_length=80)
